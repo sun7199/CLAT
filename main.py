@@ -14,6 +14,7 @@ class MyTrainer(Trainer):
     def fit_and_test(
         self,
         model: "LightningModule",
+
         train_dataloaders=None,
         val_dataloaders=None,
         datamodule: "LightningDataModule" = None,

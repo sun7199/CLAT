@@ -65,7 +65,57 @@ def deit3_base_concept(pretrained: bool, **kwargs) -> "ViTConcept":
     return model
 
 
+class DynamicAttention(Attention):
+
+    def compute_dynamic_heads(self, x: torch.Tensor):
+        """Dynamically adjust number of attention heads based on the input size or variance"""
+        B, N, C = x.shape
+        # For example, you could base it on input variance or custom logic
+        var = torch.var(x, dim=-1)
+        dynamic_num_heads = torch.clamp((var.mean() // 0.5).int(), 1, self.num_heads)
+        return dynamic_num_heads
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, N, C = x.shape
+
+        # Dynamically adjust number of heads if dynamic control is enabled
+
+        self.num_heads = self.compute_dynamic_heads(x)
+
+        qkv = (
+            self.qkv(x)
+            .reshape(B, N, 3, self.num_heads, self.head_dim)
+            .permute(2, 0, 3, 1, 4)
+        )
+        q, k, v = qkv.unbind(0)
+
+        # Apply normalization dynamically if needed (could toggle between different norms)
+        q, k = self.q_norm(q), self.k_norm(k)
+
+        # Dynamic scaling factor based on variance in attention weights
+        scale = self.scale * torch.clamp(torch.var(q, dim=-1), 0.1, 10.0).unsqueeze(-1)
+
+        q = q * scale
+        attn = q @ k.transpose(-2, -1)
+
+        attn = attn.softmax(dim=-1)
+
+        # Optional dynamic adjustment of dropout rate based on variance
+        dynamic_dropout = torch.clamp(torch.var(attn).item(), 0.0, 0.5)
+        attn = F.dropout(attn, p=dynamic_dropout, training=self.training)
+
+        weights = attn
+        x = attn @ v
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x, weights
+
+
+
 class Attention(Attention):
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, N, C = x.shape
         qkv = (
@@ -125,7 +175,8 @@ class Block(Block):
             norm_layer,
             mlp_layer,
         )
-        self.attn = Attention(
+
+        self.attn = DynamicAttention(
             dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,

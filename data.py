@@ -85,8 +85,7 @@ class FundusDatamodule(LightningDataModule):
     def setup_DDR_dataset(self) -> None:
         disease_annotation_file = "data/annotation_DDR_disease.csv"
         lesion_annotation_file = "data/annotation_DDR_lesion.csv"
-        root_dir = "/data0/wc_data/LesionDetect/DDR/fundus_384" # Modify this to your own path
-
+        root_dir = "data/test"
         disease_df = pd.read_csv(disease_annotation_file)
         lesion_df = pd.read_csv(lesion_annotation_file)
         # split data
