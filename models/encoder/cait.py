@@ -471,6 +471,40 @@ class cait_models(nn.Module):
 
         return x
 
+class DynamicConv2d(nn.Module):
+    def __init__(self, embed_dim, num_concepts, kernel_size=(1, 1)):
+        super(DynamicConv2d, self).__init__()
+        self.embed_dim = embed_dim
+        self.num_concepts = num_concepts
+        self.kernel_size = kernel_size
+
+        # A small network to generate dynamic weights for the convolution
+        self.weight_generator = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim // 2),
+            nn.ReLU(),
+            nn.Linear(embed_dim // 2, embed_dim * num_concepts * kernel_size[0] * kernel_size[1])
+        )
+        self.bias_generator = nn.Linear(embed_dim, num_concepts)
+
+    def forward(self, x):
+        B, C, H, W = x.shape
+
+        # Generate dynamic weights and biases based on the input features
+        weights = self.weight_generator(x.mean(dim=(2, 3)))  # Generate weights dynamically
+        weights = weights.view(B, self.num_concepts, C, *self.kernel_size)  # Reshape to fit Conv2d weight format
+
+        biases = self.bias_generator(x.mean(dim=(2, 3)))  # Generate dynamic biases
+
+        # Apply dynamic convolution per batch
+        output = []
+        for i in range(B):
+            output.append(
+                nn.functional.conv2d(
+                    x[i:i+1], weights[i], bias=biases[i], stride=1, padding=0
+                )
+            )
+
+        return torch.cat(output, dim=0)  # Concatenate batch results
 
 class CaiTConcept(cait_models):
     def __init__(
@@ -483,7 +517,8 @@ class CaiTConcept(cait_models):
         super().__init__(*args, **kwargs)
         self.num_concepts = num_lesions
         self.decay_parameter = decay_parameter
-        self.head = nn.Conv2d(self.embed_dim, self.num_concepts, kernel_size=[1, 1])
+        # self.head = nn.Conv2d(self.embed_dim, self.num_concepts, kernel_size=[1, 1]) # This is original conv layer
+        self.head = DynamicConv2d(self.embed_dim, self.num_concepts,kernel_size=(1, 1)) # THis is dynamic convolution     layer
         self.head.apply(self._init_weights)
 
         img_size = to_2tuple(self.img_size)

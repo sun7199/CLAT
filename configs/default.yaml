@@ -4,7 +4,7 @@ model:
   class_path: models.clat.CLAT
   init_args:
     arch_name: cait_xs24_384_concept
-    pretrained: true
+    pretrained: False
     disease_loss_weight: 1.0
     lesion_loss_weight: 0.6
     KG_loss_weight: 0.4
