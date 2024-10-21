@@ -25,6 +25,9 @@ class CrossAttention(nn.Module):
         self.proj = nn.Linear(dim, n_outputs)
         self.proj_drop = nn.Dropout(projection_dropout)
 
+        # Additional parameters for dynamic attention
+        self.dynamic_weight = nn.Parameter(torch.ones(num_heads))  # Learnable weights for each head
+
     def forward(self, x, y, weights=None):
         B, Nx, C = x.shape
         By, Ny, Cy = y.shape
@@ -48,6 +51,12 @@ class CrossAttention(nn.Module):
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
+
+        # Apply dynamic weights to the attention scores
+        attn = attn * self.dynamic_weight.view(1, self.num_heads, 1, 1)  # Broadcast weights
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
         if weights is not None:
             attn = attn * weights.repeat(1, self.num_heads, 1, 1)
         x = (attn @ v).transpose(1, 2).reshape(B, Nx, C)

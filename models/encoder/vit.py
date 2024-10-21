@@ -189,7 +189,7 @@ class Block(Block):
     def forward(self, x):
         o, weights = self.attn(self.norm1(x))
         x = x + self.drop_path1(self.ls1(o))
-        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        x= x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x, weights
 
 
